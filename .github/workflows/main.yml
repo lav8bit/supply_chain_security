@@ -13,7 +13,7 @@ jobs:
   validate-and-scan:
     name: Validate Kubernetes YAMLs and Scan for Vulnerabilities
     runs-on: ubuntu-latest
-    
+
     steps:
     # Step 1: Checkout Repository
     - name: Checkout Repository
@@ -56,13 +56,19 @@ jobs:
       with:
         directory: manifest
 
-    # Step 7: Generate Tarball from Image
+    # Step 7: Scan Kubernetes Manifests With KubeSec
+      - name: Run kubesec scanner
+        uses: controlplaneio/kubesec-action@master
+        with:
+          input: manifest/nginx-deployment.yaml
+
+    # Step 8: Generate Tarball from Image
     - name: Generate Tarball from Image
       run: |
         docker pull ${{ env.IMAGE }}
         docker save -o ${{ env.TAR }} ${{ env.IMAGE }}
 
-    # Step 8: Run Trivy Vulnerability Scanner in Tarball Mode
+    # Step 9: Run Trivy Vulnerability Scanner in Tarball Mode
     - name: Run Trivy Vulnerability Scanner in Tarball Mode
       uses: aquasecurity/trivy-action@0.28.0
       with:
@@ -70,5 +76,5 @@ jobs:
         format: 'table'                      # Output format in a table for readability
         exit-code: '1'                       # Fail the workflow on detecting vulnerabilities
         ignore-unfixed: true                 # Ignore vulnerabilities without available fixes
-        vuln-type: 'os,library'              # Scan OS packages and libraries        
+        vuln-type: 'os,library'              # Scan OS packages and libraries
         severity: 'CRITICAL,HIGH'
