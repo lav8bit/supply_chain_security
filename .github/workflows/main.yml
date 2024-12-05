@@ -19,37 +19,56 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v3
 
-    # Step 2: Generate SBOM with Anchore SBOM Action
+    # Step 2: Define Image and Tarball Variables
+    - name: Set Image and Tarball Variables
+      run: |
+        echo "IMAGE=docker.io/library/nginx:1.14.2" >> $GITHUB_ENV
+        echo "TAR=nginx_1.14.2.tar" >> $GITHUB_ENV
+
+    # Step 3: Generate SBOM with Anchore SBOM Action
     - name: Generate SBOM
       uses: anchore/sbom-action@v0
       with:
-        image: docker.io/library/nginx:1.14.2
+        image: ${{ env.IMAGE }}
+        artifact-name: sbom.spdx
 
-    # Optionally publish SBOM to GitHub releases (if desired)
-    - name: Publish SBOM to Release
-      uses: anchore/sbom-action/publish-sbom@v0
+    # Step 4: Retrieve Image Digest with Syft
+    - name: Retrieve Image Digest with Syft
+      run: |
+        syft ${{ env.IMAGE }} -o json > sbom.json
+        DIGEST=$(cat sbom.json | jq -r '.artifact.metadata.imageDigest')
+        echo "Digest: $DIGEST"
+        echo "DIGEST=$DIGEST" >> $GITHUB_ENV
+      env:
+        SYFT_CACHE_DIR: ./syft-cache
+
+    # Step 5: Upload SBOM Artifact
+    - name: Upload SBOM Artifact
+      uses: actions/upload-artifact@v4
       with:
-        sbom-artifact-match: ".*\\.spdx$"
+        name: sbom-report
+        path: sbom.json
 
-    # Step 3: Lint Kubernetes Manifests Using KubeLinter
+    # Step 6: Lint Kubernetes Manifests Using KubeLinter
     - name: Scan YAMLs
       id: kube-lint-scan
       uses: stackrox/kube-linter-action@v1
       with:
         directory: manifest
 
-    # Step 4: Run Trivy Vulnerability Scanner
-    - name: Generate tarball from image
+    # Step 7: Generate Tarball from Image
+    - name: Generate Tarball from Image
       run: |
-        docker pull 'docker.io/library/nginx:1.14.2:${{ github.sha }}'
-        docker save -o nginx_1.14.2.tar nginx:1.14.2
+        docker pull ${{ env.IMAGE }}
+        docker save -o ${{ env.TAR }} ${{ env.IMAGE }}
 
-    - name: Run Trivy vulnerability scanner in tarball mode
+    # Step 8: Run Trivy Vulnerability Scanner in Tarball Mode
+    - name: Run Trivy Vulnerability Scanner in Tarball Mode
       uses: aquasecurity/trivy-action@0.28.0
       with:
-        input: /github/workspace/nginx_1.14.2.tar
+        input: ${{ env.TAR }}
         format: 'table'                      # Output format in a table for readability
         exit-code: '1'                       # Fail the workflow on detecting vulnerabilities
         ignore-unfixed: true                 # Ignore vulnerabilities without available fixes
         vuln-type: 'os,library'              # Scan OS packages and libraries        
-        severity: 'CRITICAL,HIGH'        
+        severity: 'CRITICAL,HIGH'
