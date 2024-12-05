@@ -23,7 +23,7 @@ jobs:
     - name: Generate SBOM
       uses: anchore/sbom-action@v0
       with:
-        image: docker.io/kodekloud/webapp-color:latest
+        image: docker.io/nginx:1.14.2
 
     # Optionally publish SBOM to GitHub releases (if desired)
     - name: Publish SBOM to Release
@@ -37,13 +37,12 @@ jobs:
       uses: stackrox/kube-linter-action@v1
       with:
         directory: manifest
-        config: .kube-linter/config.yaml
 
     # Step 4: Run Trivy Vulnerability Scanner
     - name: Run Trivy Vulnerability Scanner
       uses: aquasecurity/trivy-action@0.58.0
       with:
-        image-ref: 'docker.io/kodekloud/webapp-color:latest:${{ github.sha }}'
+        image-ref: 'docker.io/nginx:1.14.2:${{ github.sha }}'
         format: 'table'                      # Output format in a table for readability
         exit-code: '1'                       # Fail the workflow on detecting vulnerabilities
         ignore-unfixed: true                 # Ignore vulnerabilities without available fixes
