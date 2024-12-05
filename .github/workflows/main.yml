@@ -57,10 +57,10 @@ jobs:
         directory: manifest
 
     # Step 7: Scan Kubernetes Manifests With KubeSec
-      - name: Run kubesec scanner
-        uses: controlplaneio/kubesec-action@master
-        with:
-          input: manifest/nginx-deployment.yaml
+    - name: Run kubesec scanner
+      uses: controlplaneio/kubesec-action@master
+      with:
+        input: manifest/nginx-deployment.yaml
 
     # Step 8: Generate Tarball from Image
     - name: Generate Tarball from Image
