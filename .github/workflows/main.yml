@@ -1,4 +1,4 @@
-name: Generate SBOM Report with Syft
+name: Generate SBOM Report and Validate Security
 
 on:
   workflow_dispatch:
@@ -10,24 +10,42 @@ on:
       - master
 
 jobs:
-  generate-sbom:
-    name: Generate SBOM for Webapp
+  validate-and-scan:
+    name: Validate Kubernetes YAMLs and Scan for Vulnerabilities
     runs-on: ubuntu-latest
     
     steps:
+    # Step 1: Checkout Repository
     - name: Checkout Repository
       uses: actions/checkout@v3
 
-    - name: Install Syft
-      run: |
-        curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
-
+    # Step 2: Generate SBOM with Anchore SBOM Action
     - name: Generate SBOM
-      run: |
-        syft docker.io/kodekloud/webapp-color:latest -o spdx-json > spdx.json
-
-    - name: Upload SBOM Artifact
-      uses: actions/upload-artifact@v3
+      uses: anchore/sbom-action@v0
       with:
-        name: sbom-report
-        path: spdx.json
+        image: docker.io/kodekloud/webapp-color:latest
+
+    # Optionally publish SBOM to GitHub releases (if desired)
+    - name: Publish SBOM to Release
+      uses: anchore/sbom-action/publish-sbom@v0
+      with:
+        sbom-artifact-match: ".*\\.spdx$"
+
+    # Step 3: Lint Kubernetes Manifests Using KubeLinter
+    - name: Scan YAMLs
+      id: kube-lint-scan
+      uses: stackrox/kube-linter-action@v1
+      with:
+        directory: manifest
+        config: .kube-linter/config.yaml
+
+    # Step 4: Run Trivy Vulnerability Scanner
+    - name: Run Trivy Vulnerability Scanner
+      uses: aquasecurity/trivy-action@0.58.0
+      with:
+        image-ref: 'docker.io/kodekloud/webapp-color:latest:${{ github.sha }}'
+        format: 'table'                      # Output format in a table for readability
+        exit-code: '1'                       # Fail the workflow on detecting vulnerabilities
+        ignore-unfixed: true                 # Ignore vulnerabilities without available fixes
+        vuln-type: 'os,library'              # Scan OS packages and libraries
+        severity: 'CRITICAL,HIGH'            # Focus on high and critical severity issues
